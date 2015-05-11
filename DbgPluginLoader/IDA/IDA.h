@@ -1,11 +1,5 @@
 #pragma once
 
-struct IDAFunctionExport
-{
-	const char *Name;
-	PVOID Function;
-};
-
 struct IDAPlugin
 {
 	HMODULE			Library;
@@ -13,7 +7,7 @@ struct IDAPlugin
 	int				LoadFlags;
 };
 
-extern IDAFunctionExport IDAExports[];
+extern ModuleExport IDAExports[];
 
 //
 // Various API defines and values
@@ -78,4 +72,4 @@ int qsnprintf_args(char *buffer, size_t n, const char *format, va_list args);
 #define DB_GET_MIN_EA (*(ea_t *)&inf[43])
 #define DB_GET_MAX_EA (*(ea_t *)&inf[47])
 
-extern BYTE inf[8192];
+extern BYTE inf[];

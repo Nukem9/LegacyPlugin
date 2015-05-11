@@ -44,6 +44,12 @@
     <ClInclude Include="IDA\Kernel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DllLoader\DllLoader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DllLoader\Exports.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -77,6 +83,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="IDA\Kernel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DllLoader\DllLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Olly\OllyDbg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

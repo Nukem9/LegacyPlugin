@@ -1,15 +1,21 @@
 #include "../stdafx.h"
 
-callui_t(idaapi*callui)(ui_notification_t what, ...);
-
 #define SET_ARG(Index, Type)				args[Index] = (PBYTE)va_arg(va, Type)
 
-#define FUNC_ARGS_0(func)					return func();
-#define FUNC_ARGS_1(func, arg1)				SET_ARG(0, arg1); return func((arg1)args[0]);
-#define FUNC_ARGS_2(func, arg1, arg2)		SET_ARG(0, arg1); SET_ARG(1, arg2); return func((arg1)args[0], (arg2)args[1]);
-#define FUNC_ARGS_3(func, arg1, arg2, arg3) SET_ARG(0, arg1); SET_ARG(1, arg2); SET_ARG(2, arg3); return func((arg1)args[0], (arg2)args[1], (arg3)args[2]);
+#define SET_ARGS_0()
+#define SET_ARGS_1(arg1)					SET_ARG(0, arg1);
+#define SET_ARGS_2(arg1, arg2)				SET_ARGS_1(arg1); SET_ARG(1, arg2);
+#define SET_ARGS_3(arg1, arg2, arg3)		SET_ARGS_2(arg1, arg2); SET_ARG(2, arg3);
+#define SET_ARGS_4(arg1, arg2, arg3, arg4)	SET_ARGS_3(arg1, arg2, arg3); SET_ARG(3, arg4);
+
+#define FUNC_ARGS_0(func)					SET_ARGS_0();					return func();
+#define FUNC_ARGS_1(func, arg1)				SET_ARGS_1(arg1);				return func((arg1)args[0]);
+#define FUNC_ARGS_2(func, arg1, arg2)		SET_ARGS_2(arg1, arg2);			return func((arg1)args[0], (arg2)args[1]);
+#define FUNC_ARGS_3(func, arg1, arg2, arg3) SET_ARGS_3(arg1, arg2, arg3);	return func((arg1)args[0], (arg2)args[1], (arg3)args[2]);
 
 #define CALLUI_NULL {nullptr}
+
+callui_t(idaapi*callui)(ui_notification_t what, ...);
 
 callui_t idaapi kernel_callui(ui_notification_t what, ...)
 {

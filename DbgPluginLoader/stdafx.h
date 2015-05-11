@@ -35,6 +35,15 @@
 //
 #include "Plugin.h"
 
+//
+// Loader
+//
+#include "DllLoader/DllLoader.h"
+#include "DllLoader/Exports.h"
+
+//
+// IDA
+//
 #include "IDA/IDA.h"
 #include "IDA/IDAPlugin.h"
 #include "IDA/UI.h"

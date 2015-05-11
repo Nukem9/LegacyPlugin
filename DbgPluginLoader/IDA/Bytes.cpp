@@ -42,8 +42,8 @@ idaman ushort ida_export get_word(ea_t ea)
 
 idaman uint32 ida_export get_3byte(ea_t ea)
 {
-	ushort lower = get_word(ea);
-	ushort upper = get_byte(ea + sizeof(ushort));
+	ushort lower = get_word(ea) & 0xFFFF;
+	ushort upper = get_byte(ea + sizeof(ushort)) & 0xFF;
 
 	return (uint32)(lower + (upper << 16));
 }

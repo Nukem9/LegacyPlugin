@@ -1,20 +1,17 @@
 #include "../stdafx.h"
 
-#define WRAP_CALL(Function) { #Function, &Function }
-
 BYTE inf[8192];
 
 idaman void ida_export sistack_t_flush(void *ss)
 {
-
 }
 
-IDAFunctionExport IDAExports[] =
+ModuleExport IDAExports[] =
 {
 	{ "_qsnprintf", qsnprintf },
 
 	// Kernel
-	WRAP_CALL(verror),
+	WRAP_EXPORT(verror),
 
 	// DB
 	{ "_inf", &inf },
@@ -24,40 +21,41 @@ IDAFunctionExport IDAExports[] =
 	{ "callui", &callui },
 
 	// Bytes
-	WRAP_CALL(nextaddr),
-	WRAP_CALL(prevaddr),
-	WRAP_CALL(get_byte),
-	WRAP_CALL(get_db_byte),
-	WRAP_CALL(get_word),
-	WRAP_CALL(get_3byte),
-	WRAP_CALL(get_long),
-	WRAP_CALL(get_qword),
-	WRAP_CALL(get_full_byte),
-	WRAP_CALL(get_full_word),
-	WRAP_CALL(get_full_long),
-	WRAP_CALL(get_8bit),
-	WRAP_CALL(get_ascii_char),
-	WRAP_CALL(get_16bit),
-	WRAP_CALL(get_32bit),
-	WRAP_CALL(get_64bit),
-	WRAP_CALL(get_many_bytes),
+	WRAP_EXPORT(nextaddr),
+	WRAP_EXPORT(prevaddr),
+	WRAP_EXPORT(get_byte),
+	WRAP_EXPORT(get_db_byte),
+	WRAP_EXPORT(get_word),
+	WRAP_EXPORT(get_3byte),
+	WRAP_EXPORT(get_long),
+	WRAP_EXPORT(get_qword),
+	WRAP_EXPORT(get_full_byte),
+	WRAP_EXPORT(get_full_word),
+	WRAP_EXPORT(get_full_long),
+	WRAP_EXPORT(get_8bit),
+	WRAP_EXPORT(get_ascii_char),
+	WRAP_EXPORT(get_16bit),
+	WRAP_EXPORT(get_32bit),
+	WRAP_EXPORT(get_64bit),
+	WRAP_EXPORT(get_many_bytes),
 
 	// Name
-	WRAP_CALL(do_name_anyway),
+	WRAP_EXPORT(do_name_anyway),
 
 	// Moves
-	WRAP_CALL(curloc_mark),
-	WRAP_CALL(curloc_markedpos),
-	WRAP_CALL(curloc_markdesc),
+	WRAP_EXPORT(curloc_mark),
+	WRAP_EXPORT(curloc_markedpos),
+	WRAP_EXPORT(curloc_markdesc),
 
 	// Loader
-	WRAP_CALL(hook_to_notification_point),
-	WRAP_CALL(unhook_from_notification_point),
+	WRAP_EXPORT(hook_to_notification_point),
+	WRAP_EXPORT(unhook_from_notification_point),
 
-	{ "sistack_t_flush", sistack_t_flush },
+	// ?
+	WRAP_EXPORT(sistack_t_flush),
+
+	END_EXPORTS(),
 };
-
-#define PtrFromRva(base, rva) (((PBYTE)base) + rva)
 
 bool LoaderResolveImport(const char *Dll, const char *Name, ULONG_PTR *Import)
 {
@@ -79,7 +77,7 @@ bool LoaderResolveImport(const char *Dll, const char *Name, ULONG_PTR *Import)
 				continue;
 
 			// Set the new pointer
-			proc = (FARPROC)IDAExports[i].Function;
+			proc = (FARPROC)IDAExports[i].Address;
 			break;
 		}
 	}
@@ -95,113 +93,42 @@ bool LoaderResolveImport(const char *Dll, const char *Name, ULONG_PTR *Import)
 	return (proc != nullptr);
 }
 
-HMODULE LoadIDAPlugin(const char *Path)
-{
-	callui = kernel_callui;
-	// Load the library, but without executing any code.
-	// The relocation table is still parsed.
-	HMODULE library = LoadLibraryEx(Path, nullptr, DONT_RESOLVE_DLL_REFERENCES);
-
-	if (!library)
-		return nullptr;
-
-	// Get pointers to the main PE information
-	PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)library;
-	PIMAGE_NT_HEADERS ntHeader	= (PIMAGE_NT_HEADERS)PtrFromRva(dosHeader, dosHeader->e_lfanew);
-
-	// All PE fields have been validated, now get the import table
-	auto moduleImports = (PIMAGE_IMPORT_DESCRIPTOR)PtrFromRva(dosHeader, ntHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
-
-	// Iterate over import descriptors/DLLs
-	for (ULONG index = 0; moduleImports[index].Characteristics != 0; index++)
-	{
-		auto importDescriptor	= &moduleImports[index];
-		PSTR dllName			= (PSTR)PtrFromRva(dosHeader, importDescriptor->Name);
-
-		// Check if the import thunk(s) exist
-		if (!importDescriptor->FirstThunk || !importDescriptor->OriginalFirstThunk)
-			return nullptr;
-
-		// Iterate over all function addresses stored in the thunk
-		PIMAGE_THUNK_DATA thunk		= (PIMAGE_THUNK_DATA)PtrFromRva(dosHeader, importDescriptor->FirstThunk);
-		PIMAGE_THUNK_DATA origThunk = (PIMAGE_THUNK_DATA)PtrFromRva(dosHeader, importDescriptor->OriginalFirstThunk);
-
-		for (; origThunk->u1.Function != 0; origThunk++, thunk++)
-		{
-			if (origThunk->u1.Ordinal & IMAGE_ORDINAL_FLAG)
-			{
-				//
-				// Ordinal import - we can handle named imports
-				// ony, so skip it.
-				//
-				continue;
-			}
-
-			PIMAGE_IMPORT_BY_NAME import = (PIMAGE_IMPORT_BY_NAME)PtrFromRva(dosHeader, origThunk->u1.AddressOfData);
-
-			// Patch the function pointer
-			DWORD oldProtection;
-
-			if (!VirtualProtect(&thunk->u1.Function, sizeof(ULONG_PTR), PAGE_READWRITE, &oldProtection))
-				return nullptr;
-
-			// Manually look up the request DLL address and apply redirection if needed
-			if (!LoaderResolveImport(dllName, import->Name, &thunk->u1.Function))
-				return nullptr;
-
-			if (!VirtualProtect(&thunk->u1.Function, sizeof(ULONG_PTR), oldProtection, &oldProtection))
-				return nullptr;
-		}
-	}
-
-	// Check if the entry point needs to be called
-	if (ntHeader->OptionalHeader.AddressOfEntryPoint != 0)
-	{
-		PBYTE entryPoint = PtrFromRva(dosHeader, ntHeader->OptionalHeader.AddressOfEntryPoint);
-	
-		// Execute DllMain
-		// Signature: BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);
-		BOOL ret = ((BOOL (WINAPI *)(HINSTANCE, DWORD, LPVOID))entryPoint)((HINSTANCE)dosHeader, DLL_PROCESS_ATTACH, nullptr);
-
-		if (ret == FALSE)
-			return nullptr;
-	}
-
-	// All imports patched successfully
-	return library;
-}
-
 std::vector<IDAPlugin> Plugins;
 
-bool IDASetupPlugin(HMODULE Library)
+HMODULE LoadIDAPlugin(const char *Path)
 {
-	// Library must be valid
-	if (!Library)
+	// temp
+	callui = kernel_callui;
+
+	// Load the library with imports resolved
+	HMODULE library = LoadPluginDll(Path, LoaderResolveImport, true);
+
+	if (!library)
 	{
 		_plugin_printf("Not loading plugin: Invalid library!\n");
-		return false;
+		return nullptr;
 	}
 
 	// Find the exported ordinal #1 for IDA
-	plugin_t *pluginStruct = (plugin_t *)GetProcAddress(Library, MAKEINTRESOURCE(1));
+	plugin_t *pluginStruct = (plugin_t *)GetProcAddress(library, MAKEINTRESOURCE(1));
 
 	if (!pluginStruct)
 	{
 		_plugin_printf("Not loading plugin: Initialization export structure not found.\n");
-		return false;
+		return nullptr;
 	}
 
 	// Validate function pointers
 	if (!pluginStruct->init || IsBadReadPtr(pluginStruct, 1) != 0)
 	{
 		_plugin_printf("Not loading plugin: Bad initialization function pointer.\n");
-		return false;
+		return nullptr;
 	}
 
 	// Create the internal data structure and call init()
 	IDAPlugin plugin;
 
-	plugin.Library		= Library;
+	plugin.Library		= library;
 	plugin.ExternalData = pluginStruct;
 	plugin.LoadFlags	= pluginStruct->init();
 
@@ -213,23 +140,7 @@ bool IDASetupPlugin(HMODULE Library)
 
 	// Everything set up correctly, add it to the global list
 	Plugins.push_back(plugin);
-	return true;
-}
-
-std::string strrep(const char *Subject, const char *Needle, const char *Replace)
-{
-	size_t pos = 0;
-
-	std::string output(Subject);
-	std::string needle(Needle);
-	
-	while ((pos = output.find(needle, pos)) != std::string::npos)
-	{
-		output.replace(pos, needle.length(), Replace);
-		pos += strlen(Replace);
-	}
-
-	return output;
+	return library;
 }
 
 idaman THREAD_SAFE int qsnprintf(char *buffer, size_t n, const char *format, ...)
@@ -247,6 +158,21 @@ int qsnprintf_args(char *buffer, size_t n, const char *format, va_list args)
 	Our definitions of sprintf-like functions support one additional format specifier
 	"%a" which corresponds to ea_t
 	*/
+	auto strrep = [](const char *Subject, const char *Needle, const char *Replace)
+	{
+		size_t pos = 0;
+
+		std::string output(Subject);
+		std::string needle(Needle);
+
+		while ((pos = output.find(needle, pos)) != std::string::npos)
+		{
+			output.replace(pos, needle.length(), Replace);
+			pos += strlen(Replace);
+		}
+
+		return output;
+	};
 
 	// '%a' -> hexadecimal output
 	char fixedFormat[4096];
